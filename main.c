@@ -1,6 +1,7 @@
 #include <raymath.h>
 #include <raylib.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <stdio.h>
 #include "./config.h"
 #include "./ui.h"
@@ -28,7 +29,7 @@ typedef union {
 
 typedef struct {
     CellType type;
-    Property prop;
+    //Property prop;
 } Cell;
 
 typedef Cell World[WORLD_WIDTH][WORLD_HEIGHT];
@@ -38,7 +39,7 @@ World world_b1 = {0};
 World world_b2 = {0};
 World *world_old = &world_b1;
 World *world_new = &world_b2;
-float step_time = BASE_STEP_TIME;
+float step_time = 0; // BASE_STEP_TIME;
 
 typedef struct {
     size_t x;
@@ -67,13 +68,6 @@ int main(void)
     SetTargetFPS(FPS);
     InitWindow(WIN_WIDTH, WIN_HEIGHT, TITLE);
 
-    /* initiate game with a clump of sand */
-    for (size_t i = 5; i < 14; ++i) {
-        for (size_t j = 5; j < 14; ++j) {
-            (*world_old)[i][j] = (Cell) { .type = CELL_TYPE_SAND };
-        }
-    }
-
     /* immortal borders */
     for (size_t i = 0; i < WORLD_WIDTH; ++i)
         (*world_old)[i][0] = (Cell) { .type = CELL_TYPE_WALL };
@@ -93,7 +87,7 @@ int main(void)
         "water");
     Slider time_slider = NewSlider(
         (Vector2) { UI_PADDING, water_button.box.y + water_button.box.height + UI_PADDING },
-        "sim speed", 0);
+        "sim speed", 1);
 
     float elapsed_time = 0;
     Cell paint_cell = (Cell) { .type = CELL_TYPE_SAND };
@@ -105,17 +99,49 @@ int main(void)
         if (elapsed_time >= step_time) {
             elapsed_time = 0;
 
-            for (size_t i = 0; i < WORLD_WIDTH; ++i) {
-                for (size_t j = 0; j < WORLD_HEIGHT; ++j) {
-                    Cell *current_cell = &(*world_old)[i][j];
-                    switch (current_cell->type) {
+            for (size_t j = 0; j < WORLD_HEIGHT; ++j) {
+                for (size_t i = 0; i < WORLD_WIDTH; ++i) {
+                    const Cell *current_cell_old = &(*world_old)[i][j];
+                    Cell *current_cell_new = &(*world_new)[i][j];
+                    //printf("%zu, %zu: switching on: %d\n", i, j, current_cell_old->type);
+                    switch (current_cell_old->type) {
+                    case CELL_TYPE_NONE: break;
                     case CELL_TYPE_SAND: {
                         size_t target_x = i;
                         size_t target_y = j + 1;
-                        if ((*world_old)[target_x][target_y].type == CELL_TYPE_NONE) {
-                            (*world_new)[target_x][target_y] = *current_cell;
-                        } else {
-                            (*world_new)[i][j] = (Cell) { .type = CELL_TYPE_SAND };
+                        const Cell *target_cell_old = &(*world_old)[target_x][target_y];
+                        Cell *target_cell_new = &(*world_new)[target_x][target_y];
+                        switch (target_cell_old->type) {
+                        case CELL_TYPE_NONE: {
+                            *target_cell_new = *current_cell_old;
+                        } break;
+                        default: {
+                            if ((*world_old)[i+1][j+1].type == CELL_TYPE_NONE)
+                                (*world_new)[i+1][j+1] = *current_cell_old;
+                            else if ((*world_old)[i-1][j+1].type == CELL_TYPE_NONE)
+                                (*world_new)[i-1][j+1] = *current_cell_old;
+                            else
+                                *current_cell_new = *current_cell_old;
+                        } break;
+                        }
+                    } break;
+                    case CELL_TYPE_WATER: {
+                        size_t target_x = i;
+                        size_t target_y = j + 1;
+                        const Cell *target_cell_old = &(*world_old)[target_x][target_y];
+                        Cell *target_cell_new = &(*world_new)[target_x][target_y];
+                        switch (target_cell_old->type) {
+                        case CELL_TYPE_NONE: {
+                            *target_cell_new = *current_cell_old;
+                        } break;
+                        default: {
+                            if ((*world_old)[i+1][j+1].type == CELL_TYPE_NONE)
+                                (*world_new)[i+1][j+1] = *current_cell_old;
+                            else if ((*world_old)[i-1][j+1].type == CELL_TYPE_NONE)
+                                (*world_new)[i-1][j+1] = *current_cell_old;
+                            else
+                                *current_cell_new = *current_cell_old;
+                        } break;
                         }
                     } break;
                     case CELL_TYPE_WALL: {
@@ -123,7 +149,7 @@ int main(void)
                         // will result in a segfault
                         (*world_new)[i][j] = (Cell) { .type = CELL_TYPE_WALL };
                     } break;
-                    default: break;
+                    default: assert(false && "unreachable");
                     }
                 }
             }

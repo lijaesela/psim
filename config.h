@@ -22,8 +22,8 @@
 #define WALL_COLOR  GRAY
 #define WATER_COLOR BLUE
 
-#define WORLD_WIDTH  64u
-#define WORLD_HEIGHT 48u
+#define WORLD_WIDTH  (640u / 4u)
+#define WORLD_HEIGHT (480u / 4u)
 #define BASE_STEP_TIME 0.4f
 
 #endif // CONFIG_H
