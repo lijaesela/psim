@@ -38,7 +38,7 @@ World world_b1 = {0};
 World world_b2 = {0};
 World *world_old = &world_b1;
 World *world_new = &world_b2;
-float step_time = 0.5f;
+float step_time = BASE_STEP_TIME;
 
 typedef struct {
     size_t x;
@@ -91,10 +91,14 @@ int main(void)
     Button water_button = NewButton(
         (Vector2) { UI_PADDING, sand_button.box.y + sand_button.box.height + UI_PADDING },
         "water");
+    Slider time_slider = NewSlider(
+        (Vector2) { UI_PADDING, water_button.box.y + water_button.box.height + UI_PADDING },
+        "sim speed", 0);
 
     float elapsed_time = 0;
     Cell paint_cell = (Cell) { .type = CELL_TYPE_SAND };
     bool painting = false;
+    bool can_click = true;
     while (!WindowShouldClose()) {
         const float dt = GetFrameTime();
         elapsed_time += dt;
@@ -134,17 +138,30 @@ int main(void)
             }
         }
 
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            if (ButtonClicked(sand_button)) {
-                paint_cell = (Cell) { .type = CELL_TYPE_SAND };
-            } else if (ButtonClicked(water_button)) {
-                paint_cell = (Cell) { .type = CELL_TYPE_WATER };
-            } else {
-                painting = true;
+        // mmm yum boolean soup
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
+            painting = false;
+            /* holdable things */
+            if (SliderSlid(&time_slider)) {
+                step_time = BASE_STEP_TIME - time_slider.val * BASE_STEP_TIME;
+                can_click = false;
+            } else if (can_click) {
+                /* non-holdable, single click */
+                if (ButtonClicked(sand_button)) {
+                    paint_cell = (Cell) { .type = CELL_TYPE_SAND };
+                    can_click = false;
+                } else if (ButtonClicked(water_button)) {
+                    paint_cell = (Cell) { .type = CELL_TYPE_WATER };
+                    can_click = false;
+                } else {
+                    painting = true;
+                }
             }
         } else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
-            painting = false;
+            painting  = false;
+            can_click = true;
         }
+
         if (painting) {
             Pos p = WindowPosToWorldPos(GetMousePosition());
             if (p.x > 0 && p.y > 0 && p.x < WORLD_WIDTH - 1 && p.y < WORLD_HEIGHT - 1) {
@@ -182,8 +199,13 @@ int main(void)
                     DrawRectangleRec(rec, col);
                 }
             }
+
             DrawButton(sand_button);
             DrawButton(water_button);
+            DrawSlider(time_slider);
+
         EndDrawing();
     }
+
+    CloseWindow();
 }
