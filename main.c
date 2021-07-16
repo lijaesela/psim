@@ -1,6 +1,7 @@
 #include <raymath.h>
 #include <raylib.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include "./config.h"
@@ -15,6 +16,8 @@
 #define PRINT_REC(rec) \
     printf(#rec": {\n    x: %f\n    y: %f\n    w: %f\n    h: %f\n}\n", \
            (rec).x, (rec).y, (rec).width, (rec).height);
+
+//#define SINGLE_BUFFER
 
 typedef enum {
     CELL_TYPE_NONE = 0,
@@ -38,7 +41,11 @@ typedef Cell World[WORLD_WIDTH][WORLD_HEIGHT];
 World world_b1 = {0};
 World world_b2 = {0};
 World *world_old = &world_b1;
+#ifndef SINGLE_BUFFER
 World *world_new = &world_b2;
+#else
+World *world_new = &world_b1;
+#endif // SINGLE_BUFFER
 float step_time = 0; // BASE_STEP_TIME;
 
 typedef struct {
@@ -56,11 +63,14 @@ Pos WindowPosToWorldPos(Vector2 window_pos)
 
 void ClearWorld(World *world, size_t width, size_t height)
 {
+    memset(world, 0, sizeof(Cell) * WORLD_WIDTH * WORLD_HEIGHT);
+    /*
     for (size_t i = 0; i < width; ++i) {
         for (size_t j = 0; j < height; ++j) {
             (*world)[i][j] = (Cell) { .type = CELL_TYPE_NONE };
         }
     }
+    */
 }
 
 int main(void)
@@ -93,6 +103,7 @@ int main(void)
     Cell paint_cell = (Cell) { .type = CELL_TYPE_SAND };
     bool painting = false;
     bool can_click = true;
+    bool water_flows_right = true;
     while (!WindowShouldClose()) {
         const float dt = GetFrameTime();
         elapsed_time += dt;
@@ -135,11 +146,23 @@ int main(void)
                             *target_cell_new = *current_cell_old;
                         } break;
                         default: {
-                            if ((*world_old)[i+1][j+1].type == CELL_TYPE_NONE)
-                                (*world_new)[i+1][j+1] = *current_cell_old;
-                            else if ((*world_old)[i-1][j+1].type == CELL_TYPE_NONE)
-                                (*world_new)[i-1][j+1] = *current_cell_old;
-                            else
+                            bool moved = true;
+                            if (GetRandomValue(0, 1)) {
+                                if ((*world_old)[i+1][j+1].type == CELL_TYPE_NONE && (*world_new)[i+1][j+1].type == CELL_TYPE_NONE)
+                                    (*world_new)[i+1][j+1] = *current_cell_old;
+                                else  if ((*world_old)[i+1][j].type == CELL_TYPE_NONE && (*world_new)[i+1][j].type == CELL_TYPE_NONE)
+                                    (*world_new)[i+1][j] = *current_cell_old;
+                                else
+                                    moved = false;
+                            } else {
+                                if ((*world_old)[i-1][j+1].type == CELL_TYPE_NONE && (*world_new)[i-1][j+1].type == CELL_TYPE_NONE)
+                                    (*world_new)[i-1][j+1] = *current_cell_old;
+                                else if ((*world_old)[i-1][j].type == CELL_TYPE_NONE && (*world_new)[i-1][j].type == CELL_TYPE_NONE)
+                                    (*world_new)[i-1][j] = *current_cell_old;
+                                else
+                                    moved = false;
+                            }
+                            if (!moved)
                                 *current_cell_new = *current_cell_old;
                         } break;
                         }
@@ -153,7 +176,9 @@ int main(void)
                     }
                 }
             }
+            water_flows_right = !water_flows_right;
 
+#ifndef SINGLE_BUFFER
             ClearWorld(world_old, WORLD_WIDTH, WORLD_HEIGHT);
 
             {
@@ -162,6 +187,7 @@ int main(void)
                 world_old = world_new;
                 world_new = tmp;
             }
+#endif // SINGLE_BUFFER
         }
 
         // mmm yum boolean soup
