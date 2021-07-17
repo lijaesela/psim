@@ -69,7 +69,7 @@ Pos WindowPosToWorldPos(Vector2 window_pos)
 static inline
 void ClearWorld(World *world, size_t width, size_t height)
 {
-    memset(world, 0, sizeof(Cell) * WORLD_WIDTH * WORLD_HEIGHT);
+    memset(world, 0, sizeof(Cell) * width * height);
 }
 
 int main(void)
@@ -124,7 +124,6 @@ int main(void)
                     Cell *current_cell_new = &(*world_new)[i][j];
                     const Cell *cell_below_old = &(*world_old)[i][j+1];
                     Cell *cell_below_new = &(*world_new)[i][j+1];
-                    //printf("%zu, %zu: switching on: %d\n", i, j, current_cell_old->type);
                     switch (current_cell_old->type) {
                     case CELL_TYPE_NONE: break;
                     case CELL_TYPE_SAND: {
@@ -159,18 +158,24 @@ int main(void)
                             // fill!
                             bool moved = true;
                             if (RANDOM_BOOL) {
-                                if ((*world_old)[i+2][j].type == CELL_TYPE_NONE && (*world_new)[i+2][j].type == CELL_TYPE_NONE)
-                                    (*world_new)[i+2][j] = *current_cell_old;
-                                else  if ((*world_old)[i+1][j].type == CELL_TYPE_NONE && (*world_new)[i+1][j].type == CELL_TYPE_NONE)
-                                    (*world_new)[i+1][j] = *current_cell_old;
-                                else
+                                if ((*world_old)[i+1][j].type == CELL_TYPE_NONE
+                                    && (*world_new)[i+1][j].type == CELL_TYPE_NONE) {
+                                    if ((*world_old)[i+2][j].type == CELL_TYPE_NONE
+                                        && (*world_new)[i+2][j].type == CELL_TYPE_NONE)
+                                        (*world_new)[i+2][j] = *current_cell_old;
+                                    else
+                                        (*world_new)[i+1][j] = *current_cell_old;
+                                } else
                                     moved = false;
                             } else {
-                                if ((*world_old)[i-2][j].type == CELL_TYPE_NONE && (*world_new)[i-2][j].type == CELL_TYPE_NONE)
-                                    (*world_new)[i-2][j] = *current_cell_old;
-                                else if ((*world_old)[i-1][j].type == CELL_TYPE_NONE && (*world_new)[i-1][j].type == CELL_TYPE_NONE)
-                                    (*world_new)[i-1][j] = *current_cell_old;
-                                else
+                                if ((*world_old)[i-1][j].type == CELL_TYPE_NONE
+                                    && (*world_new)[i-1][j].type == CELL_TYPE_NONE) {
+                                    if ((*world_old)[i-2][j].type == CELL_TYPE_NONE
+                                        && (*world_new)[i-2][j].type == CELL_TYPE_NONE)
+                                        (*world_new)[i-2][j] = *current_cell_old;
+                                    else
+                                        (*world_new)[i-1][j] = *current_cell_old;
+                                } else
                                     moved = false;
                             }
                             if (!moved && current_cell_new->type == CELL_TYPE_NONE)
@@ -178,49 +183,25 @@ int main(void)
                         } break;
                         }
                     } break;
-                    /*
                     case CELL_TYPE_OIL: {
-                        size_t target_x = i;
-                        size_t target_y = j + 1;
-                        const Cell *target_cell_old = &(*world_old)[target_x][target_y];
-                        Cell *target_cell_new = &(*world_new)[target_x][target_y];
-                        switch (target_cell_old->type) {
-                        case CELL_TYPE_NONE: {
-                            *target_cell_new = *current_cell_old;
-                        } break;
-                        default: {
-                            bool moved = true;
-                            if (RANDOM_BOOL) {
-                                if ((*world_old)[i+1][j+1].type == CELL_TYPE_NONE && (*world_new)[i+1][j+1].type == CELL_TYPE_NONE)
-                                    (*world_new)[i+1][j+1] = *current_cell_old;
-                                else  if ((*world_old)[i+1][j].type == CELL_TYPE_NONE && (*world_new)[i+1][j].type == CELL_TYPE_NONE)
-                                    (*world_new)[i+1][j] = *current_cell_old;
-                                else
-                                    moved = false;
-                            } else {
-                                if ((*world_old)[i-1][j+1].type == CELL_TYPE_NONE && (*world_new)[i-1][j+1].type == CELL_TYPE_NONE)
-                                    (*world_new)[i-1][j+1] = *current_cell_old;
-                                else if ((*world_old)[i-1][j].type == CELL_TYPE_NONE && (*world_new)[i-1][j].type == CELL_TYPE_NONE)
-                                    (*world_new)[i-1][j] = *current_cell_old;
-                                else
-                                    moved = false;
-                            }
-                            if (!moved)
-                                *current_cell_new = *current_cell_old;
-                        } break;
-                        }
+                        *current_cell_new = *current_cell_old;
                     } break;
-                    */
                     case CELL_TYPE_FACTORY: {
                         const Cell *cell_above_old = &(*world_old)[i][j-1];
                         if (current_cell_old->prop.cell_to_spawn != CELL_TYPE_NONE
                             && cell_below_old->type == CELL_TYPE_NONE
                             && cell_below_new->type == CELL_TYPE_NONE)
-                            *cell_below_new = (Cell) { .type = current_cell_old->prop.cell_to_spawn, .prop = {0} };
+                            *cell_below_new = (Cell) {
+                                .type = current_cell_old->prop.cell_to_spawn,
+                                .prop = {0},
+                            };
                         if (cell_above_old->type != CELL_TYPE_NONE)
-                            *current_cell_new = (Cell) { .type = CELL_TYPE_FACTORY, .prop.cell_to_spawn = cell_above_old->type };
+                            *current_cell_new = (Cell) {
+                                .type = CELL_TYPE_FACTORY,
+                                .prop.cell_to_spawn = cell_above_old->type,
+                            };
                         else
-                            *current_cell_new = (Cell) { .type = CELL_TYPE_FACTORY, .prop.cell_to_spawn = CELL_TYPE_NONE };
+                            *current_cell_new = *current_cell_old;
                     } break;
                     case CELL_TYPE_WALL: {
                         // walls trying to access their surroundings
@@ -246,6 +227,12 @@ int main(void)
                 world_new = tmp;
             }
 #endif // SINGLE_BUFFER
+        }
+
+        // an alternative way to quit since raylib uses keycodes instead of keysyms >:(
+        if (IsKeyDown(KEY_Q)) {
+            CloseWindow();
+            exit(0);
         }
 
         // mmm yum boolean soup
