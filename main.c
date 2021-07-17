@@ -14,6 +14,9 @@
 #define PRINT_POS(pos) \
     printf(#pos": {\n    x: %zu\n    y: %zu\n}\n", \
            (pos).x, (pos).y);
+#define PRINT_VEC(vec) \
+    printf(#vec": {\n    x: %f\n    y: %f\n}\n", \
+           (vec).x, (vec).y);
 #define PRINT_REC(rec) \
     printf(#rec": {\n    x: %f\n    y: %f\n    w: %f\n    h: %f\n}\n", \
            (rec).x, (rec).y, (rec).width, (rec).height);
