@@ -27,8 +27,10 @@
 #define WORLD_WIDTH  (640u / 4u)
 #define WORLD_HEIGHT (480u / 4u)
 #define BASE_STEP_TIME 0.4f
+#define BRUSH_MIN 1 // must not go below 1
+#define BRUSH_MAX 4
 
-// watch the world burn
+// fuck everything up
 //#define SINGLE_BUFFER
 
 #endif // CONFIG_H

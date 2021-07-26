@@ -102,14 +102,21 @@ int main(void)
     Button factory_button = NewButton(
         (Vector2) { UI_PADDING, wall_button.box.y + wall_button.box.height + UI_PADDING },
         "factory");
-    Slider time_slider = NewSlider(
+    Button none_button = NewButton(
         (Vector2) { UI_PADDING, factory_button.box.y + factory_button.box.height + UI_PADDING },
+        "none (erase)");
+    Slider brush_slider = NewSlider(
+        (Vector2) { UI_PADDING, none_button.box.y + none_button.box.height + UI_PADDING },
+        "brush size", 1);
+    Slider time_slider = NewSlider(
+        (Vector2) { UI_PADDING, brush_slider.box.y + brush_slider.box.height + UI_PADDING },
         "sim speed", 1);
 
     float elapsed_time = 0;
     Cell paint_cell = (Cell) { .type = CELL_TYPE_SAND };
     bool painting = false;
     bool can_click = true;
+    int brush_radius = 1;
     bool water_flows_right = true;
     while (!WindowShouldClose()) {
         const float dt = GetFrameTime();
@@ -228,7 +235,8 @@ int main(void)
 #endif // SINGLE_BUFFER
         }
 
-        // an alternative way to quit since raylib uses keycodes instead of keysyms >:(
+        // an alternative way to quit since raylib uses keycodes instead of keysyms
+        // and using caps lock for escape via xkb options doesn't work >:(
         if (IsKeyDown(KEY_Q)) {
             CloseWindow();
             exit(0);
@@ -237,50 +245,56 @@ int main(void)
         // mmm yum boolean soup
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
             /* holdable things */
-            if (!painting && SliderSlid(&time_slider)) {
-                step_time = BASE_STEP_TIME - time_slider.val * BASE_STEP_TIME;
-                can_click = false;
-                painting = false;
-            } else if (can_click) {
+            if (!painting) {
+                if (SliderSlid(&time_slider)) {
+                    step_time = BASE_STEP_TIME - time_slider.val * BASE_STEP_TIME;
+                    can_click = false; painting = false;
+                } else if (SliderSlid(&brush_slider)) {
+                    brush_radius = (int) (brush_slider.val * (BRUSH_MAX - BRUSH_MIN)) + BRUSH_MIN;
+                    can_click = false; painting = false;
+                }
+            }
+            if (can_click) {
                 /* non-holdable, single click */
                 if (ButtonClicked(sand_button)) {
                     paint_cell = (Cell) { .type = CELL_TYPE_SAND };
-                    can_click = false;
-                    painting = false;
+                    can_click = false; painting = false;
                 } else if (ButtonClicked(water_button)) {
                     paint_cell = (Cell) { .type = CELL_TYPE_WATER };
-                    can_click = false;
-                    painting = false;
+                    can_click = false; painting = false;
                 } else if (ButtonClicked(oil_button)) {
                     paint_cell = (Cell) { .type = CELL_TYPE_OIL };
-                    can_click = false;
-                    painting = false;
+                    can_click = false; painting = false;
                 } else if (ButtonClicked(wall_button)) {
                     paint_cell = (Cell) { .type = CELL_TYPE_WALL };
-                    can_click = false;
-                    painting = false;
+                    can_click = false; painting = false;
                 } else if (ButtonClicked(factory_button)) {
                     paint_cell = (Cell) { .type = CELL_TYPE_FACTORY, .prop.cell_to_spawn = CELL_TYPE_NONE };
-                    can_click = false;
-                    painting = false;
+                    can_click = false; painting = false;
+                } else if (ButtonClicked(none_button)) {
+                    paint_cell = (Cell) { .type = CELL_TYPE_NONE };
+                    can_click = false; painting = false;
                 } else {
-                    painting = true;
-                    can_click = false;
+                    painting = true; can_click = false;
                 }
             }
         } else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
-            painting  = false;
-            can_click = true;
+            painting  = false; can_click = true;
         }
 
         if (painting) {
             Vector2 p = GetMousePosition();
             p.x /= CELL_WIDTH;
             p.y /= CELL_HEIGHT;
-            //if (p.x > 0 && p.y > 0 && p.x < WORLD_WIDTH - 1 && p.y < WORLD_HEIGHT - 1) {
-                // again, old is actually new here
-            (*world_old)[(size_t) Clamp(p.x, 1, WORLD_WIDTH - 2)][(size_t) Clamp(p.y, 1, WORLD_HEIGHT - 2)] = paint_cell;
-            //}
+            int ix = (size_t) Clamp(p.x, 1, WORLD_WIDTH - 2); // padding for walls
+            int iy = (size_t) Clamp(p.y, 1, WORLD_HEIGHT - 2);
+            for (int i = ix - (brush_radius - 1); i < ix + brush_radius; ++i) {
+                if (i < 1 || i > (int) WORLD_WIDTH - 2) continue;
+                for (int j = iy - (brush_radius - 1); j < iy + brush_radius; ++j) {
+                    if (j < 1 || j > (int) WORLD_HEIGHT - 2) continue;
+                    (*world_old)[i][j] = paint_cell;
+                }
+            }
         }
 
         BeginDrawing();
@@ -325,6 +339,8 @@ int main(void)
             DrawButton(oil_button);
             DrawButton(wall_button);
             DrawButton(factory_button);
+            DrawButton(none_button);
+            DrawSlider(brush_slider);
             DrawSlider(time_slider);
 
         EndDrawing();
