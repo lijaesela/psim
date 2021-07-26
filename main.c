@@ -21,15 +21,15 @@
     printf(#rec": {\n    x: %f\n    y: %f\n    w: %f\n    h: %f\n}\n", \
            (rec).x, (rec).y, (rec).width, (rec).height);
 
-// should be in order of weight
+// NOTE: MUST be in order of weight
 typedef enum {
     CELL_TYPE_NONE = 0,
     CELL_TYPE_FIRE,
     CELL_TYPE_OIL,
     CELL_TYPE_WATER,
     CELL_TYPE_SAND,
-    CELL_TYPE_WALL,
     CELL_TYPE_FACTORY,
+    CELL_TYPE_WALL,
     COUNT_CELL_TYPES,
 } CellType;
 
@@ -55,24 +55,20 @@ World *world_new = &world_b1;
 #endif // SINGLE_BUFFER
 float step_time = 0; // BASE_STEP_TIME;
 
-typedef struct {
-    size_t x;
-    size_t y;
-} Pos;
-
-static inline
-Pos WindowPosToWorldPos(Vector2 window_pos)
-{
-    return (Pos) {
-        .x = window_pos.x / CELL_WIDTH,
-        .y = window_pos.y / CELL_HEIGHT,
-    };
-}
-
 static inline
 void ClearWorld(World *world, size_t width, size_t height)
 {
     memset(world, 0, sizeof(Cell) * width * height);
+}
+
+size_t ClampSize(size_t val, size_t min, size_t max)
+{
+    if (val < min)
+        return min;
+    else if (val > max)
+        return max;
+    else
+        return val;
 }
 
 int main(void)
@@ -142,9 +138,9 @@ int main(void)
                         } break;
                         default: {
                             // flow down diagonally to make dunes
-                            if ((*world_old)[i+1][j+1].type == CELL_TYPE_NONE)
+                            if ((*world_old)[i+1][j+1].type <= CELL_TYPE_WATER)
                                 (*world_new)[i+1][j+1] = *current_cell_old;
-                            else if ((*world_old)[i-1][j+1].type == CELL_TYPE_NONE)
+                            else if ((*world_old)[i-1][j+1].type <= CELL_TYPE_WATER)
                                 (*world_new)[i-1][j+1] = *current_cell_old;
                             else
                                 *current_cell_new = *current_cell_old;
@@ -278,11 +274,13 @@ int main(void)
         }
 
         if (painting) {
-            Pos p = WindowPosToWorldPos(GetMousePosition());
-            if (p.x > 0 && p.y > 0 && p.x < WORLD_WIDTH - 1 && p.y < WORLD_HEIGHT - 1) {
+            Vector2 p = GetMousePosition();
+            p.x /= CELL_WIDTH;
+            p.y /= CELL_HEIGHT;
+            //if (p.x > 0 && p.y > 0 && p.x < WORLD_WIDTH - 1 && p.y < WORLD_HEIGHT - 1) {
                 // again, old is actually new here
-                (*world_old)[p.x][p.y] = paint_cell;
-            }
+            (*world_old)[(size_t) Clamp(p.x, 1, WORLD_WIDTH - 2)][(size_t) Clamp(p.y, 1, WORLD_HEIGHT - 2)] = paint_cell;
+            //}
         }
 
         BeginDrawing();
