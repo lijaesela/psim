@@ -107,7 +107,7 @@ int main(void)
         "none (erase)");
     Slider brush_slider = NewSlider(
         (Vector2) { UI_PADDING, none_button.box.y + none_button.box.height + UI_PADDING },
-        "brush size", 1);
+        "brush size", 0);
     Slider time_slider = NewSlider(
         (Vector2) { UI_PADDING, brush_slider.box.y + brush_slider.box.height + UI_PADDING },
         "sim speed", 1);
@@ -116,7 +116,7 @@ int main(void)
     Cell paint_cell = (Cell) { .type = CELL_TYPE_SAND };
     bool painting = false;
     bool can_click = true;
-    int brush_radius = 1;
+    int brush_radius = BRUSH_MIN;
     bool water_flows_right = true;
     while (!WindowShouldClose()) {
         const float dt = GetFrameTime();
