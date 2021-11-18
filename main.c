@@ -23,7 +23,7 @@
 
 // NOTE: MUST be in order of weight
 typedef enum {
-    CELL_TYPE_NONE = 0,
+    //CELL_TYPE_NONE = 0, // no more!
     CELL_TYPE_FIRE,
     CELL_TYPE_OIL,
     CELL_TYPE_WATER,
@@ -40,25 +40,23 @@ typedef union {
 typedef struct {
     CellType type;
     CellProp prop;
+    int x;
+    int y;
 } Cell;
 
-typedef Cell World[WORLD_WIDTH][WORLD_HEIGHT];
+#define MAX_CELLS (WORLD_WIDTH * WORLD_HEIGHT)
 
-// for double-buffered logic
-World world_b1 = {0};
-World world_b2 = {0};
-World *world_old = &world_b1;
-#ifndef SINGLE_BUFFER
-World *world_new = &world_b2;
-#else
-World *world_new = &world_b1;
-#endif // SINGLE_BUFFER
-float step_time = 0; // BASE_STEP_TIME;
+Cell CELLS[MAX_CELLS];
+size_t CELL_COUNT = 0;
 
-static inline
-void ClearWorld(World *world, size_t width, size_t height)
+float step_time = 0;
+
+void add_cell(Cell c)
 {
-    memset(world, 0, sizeof(Cell) * width * height);
+    if (CELL_COUNT != MAX_CELLS)
+        CELLS[CELL_COUNT++] = c;
+    else
+        TraceLog(LOG_WARNING, "cell limit of %zu reached");
 }
 
 size_t ClampSize(size_t val, size_t min, size_t max)
@@ -78,13 +76,13 @@ int main(void)
 
     /* immortal borders */
     for (size_t i = 0; i < WORLD_WIDTH; ++i)
-        (*world_old)[i][0] = (Cell) { .type = CELL_TYPE_WALL };
+        add_cell((Cell) { .type = CELL_TYPE_WALL, .x = i, .y = 0});
     for (size_t i = 0; i < WORLD_WIDTH; ++i)
-        (*world_old)[i][WORLD_HEIGHT - 1] = (Cell) { .type = CELL_TYPE_WALL };
-    for (size_t j = 0; j < WORLD_HEIGHT; ++j)
-        (*world_old)[0][j] = (Cell) { .type = CELL_TYPE_WALL };
-    for (size_t j = 0; j < WORLD_HEIGHT; ++j)
-        (*world_old)[WORLD_WIDTH - 1][j] = (Cell) { .type = CELL_TYPE_WALL };
+        add_cell((Cell) { .type = CELL_TYPE_WALL, .x = i, .y = WORLD_HEIGHT - 1});
+    for (size_t j = 1; j < WORLD_HEIGHT - 1; ++j)
+        add_cell((Cell) { .type = CELL_TYPE_WALL, .x = 0, .y = j});
+    for (size_t j = 1; j < WORLD_HEIGHT - 1; ++j)
+        add_cell((Cell) { .type = CELL_TYPE_WALL, .x = WORLD_WIDTH - 1, .y = j});
 
     /* initiate UI */
     Button sand_button = NewButton(
@@ -124,119 +122,100 @@ int main(void)
         if (elapsed_time >= step_time) {
             elapsed_time = 0;
 
-            for (size_t j = 0; j < WORLD_HEIGHT; ++j) {
-                for (size_t i = 0; i < WORLD_WIDTH; ++i) {
-                    const Cell *current_cell_old = &(*world_old)[i][j];
-                    Cell *current_cell_new = &(*world_new)[i][j];
-                    const Cell *cell_below_old = &(*world_old)[i][j+1];
-                    Cell *cell_below_new = &(*world_new)[i][j+1];
-                    switch (current_cell_old->type) {
-                    case CELL_TYPE_NONE: break;
-                    case CELL_TYPE_SAND: {
-                        switch (cell_below_old->type) {
-                        case CELL_TYPE_NONE: {
-                            // fall through space
-                            *cell_below_new = *current_cell_old;
-                        } break;
-                        case CELL_TYPE_WATER: {
-                            // fall through water and push it above
-                            *cell_below_new = *current_cell_old;
-                            *current_cell_new = *cell_below_old;
-                        } break;
-                        default: {
-                            // flow down diagonally to make dunes
-                            if ((*world_old)[i+1][j+1].type <= CELL_TYPE_WATER)
-                                (*world_new)[i+1][j+1] = *current_cell_old;
-                            else if ((*world_old)[i-1][j+1].type <= CELL_TYPE_WATER)
-                                (*world_new)[i-1][j+1] = *current_cell_old;
-                            else
-                                *current_cell_new = *current_cell_old;
-                        } break;
-                        }
-                    } break;
-                    case CELL_TYPE_WATER: {
-                        switch (cell_below_old->type) {
-                        case CELL_TYPE_NONE: {
-                            // fall through space
-                            *cell_below_new = *current_cell_old;
-                        } break;
-                        default: {
-                            // fill!
-                            bool moved = true;
-                            if (RANDOM_BOOL) {
-                                if ((*world_old)[i+1][j].type == CELL_TYPE_NONE
-                                    && (*world_new)[i+1][j].type == CELL_TYPE_NONE) {
-                                    if ((*world_old)[i+2][j].type == CELL_TYPE_NONE
-                                        && (*world_new)[i+2][j].type == CELL_TYPE_NONE)
-                                        (*world_new)[i+2][j] = *current_cell_old;
-                                    else
-                                        (*world_new)[i+1][j] = *current_cell_old;
-                                } else
-                                    moved = false;
-                            } else {
-                                if ((*world_old)[i-1][j].type == CELL_TYPE_NONE
-                                    && (*world_new)[i-1][j].type == CELL_TYPE_NONE) {
-                                    if ((*world_old)[i-2][j].type == CELL_TYPE_NONE
-                                        && (*world_new)[i-2][j].type == CELL_TYPE_NONE)
-                                        (*world_new)[i-2][j] = *current_cell_old;
-                                    else
-                                        (*world_new)[i-1][j] = *current_cell_old;
-                                } else
-                                    moved = false;
-                            }
-                            if (!moved && current_cell_new->type == CELL_TYPE_NONE)
-                                *current_cell_new = *current_cell_old;
-                        } break;
-                        }
-                    } break;
-                    case CELL_TYPE_OIL: {
-                        *current_cell_new = *current_cell_old;
-                    } break;
-                    case CELL_TYPE_FACTORY: {
-                        const Cell *cell_above_old = &(*world_old)[i][j-1];
-                        if (current_cell_old->prop.cell_to_spawn != CELL_TYPE_NONE
-                            && cell_below_old->type == CELL_TYPE_NONE
-                            && cell_below_new->type == CELL_TYPE_NONE)
-                            *cell_below_new = (Cell) {
-                                .type = current_cell_old->prop.cell_to_spawn,
-                                .prop = {0},
-                            };
-                        if (cell_above_old->type != CELL_TYPE_NONE)
-                            *current_cell_new = (Cell) {
-                                .type = CELL_TYPE_FACTORY,
-                                .prop.cell_to_spawn = cell_above_old->type,
-                            };
-                        else
-                            *current_cell_new = *current_cell_old;
-                    } break;
-                    case CELL_TYPE_WALL: {
-                        // walls trying to access their surroundings
-                        // will result in a segfault, as they are the world borders
-                        *current_cell_new = *current_cell_old;
+            for (size_t i = 0; i < CELL_COUNT; ++i) {
+                switch (CELLS[i].type) {
+                case CELL_TYPE_SAND: {
+                    bool can_fall = true;
+                    for (size_t j = 0; j < CELL_COUNT; ++j) {
+                        if (CELLS[j].x == CELLS[i].x
+                            && CELLS[j].y == CELLS[i].y + 1)
+                            can_fall = false;
+                    }
+                    if (can_fall) CELLS[i].y++;
+                } break;
+                case CELL_TYPE_WATER: {
+                    /*
+                    switch (cell_below_old->type) {
+                    case CELL_TYPE_NONE: {
+                        // fall through space
+                        *cell_below_new = *current_cell_old;
                     } break;
                     default: {
-                        TraceLog(LOG_FATAL, "no logic in place for cell type %d", current_cell_old->type);
-                        CloseWindow(); exit(1);
+                        // fill!
+                        bool moved = true;
+                        if (RANDOM_BOOL) {
+                            if ((*world_old)[i+1][j].type == CELL_TYPE_NONE
+                                && (*world_new)[i+1][j].type == CELL_TYPE_NONE) {
+                                if ((*world_old)[i+2][j].type == CELL_TYPE_NONE
+                                    && (*world_new)[i+2][j].type == CELL_TYPE_NONE)
+                                    (*world_new)[i+2][j] = *current_cell_old;
+                                else
+                                    (*world_new)[i+1][j] = *current_cell_old;
+                            } else
+                                moved = false;
+                        } else {
+                            if ((*world_old)[i-1][j].type == CELL_TYPE_NONE
+                                && (*world_new)[i-1][j].type == CELL_TYPE_NONE) {
+                                if ((*world_old)[i-2][j].type == CELL_TYPE_NONE
+                                    && (*world_new)[i-2][j].type == CELL_TYPE_NONE)
+                                    (*world_new)[i-2][j] = *current_cell_old;
+                                else
+                                    (*world_new)[i-1][j] = *current_cell_old;
+                            } else
+                                moved = false;
+                        }
+                        if (!moved && current_cell_new->type == CELL_TYPE_NONE)
+                            *current_cell_new = *current_cell_old;
                     } break;
                     }
+                    */
+                } break;
+                case CELL_TYPE_OIL: {
+                } break;
+                case CELL_TYPE_FACTORY: {
+                    /*
+                    const Cell *cell_above_old = &(*world_old)[i][j-1];
+                    if (current_cell_old->prop.cell_to_spawn != CELL_TYPE_NONE
+                        && cell_below_old->type == CELL_TYPE_NONE
+                        && cell_below_new->type == CELL_TYPE_NONE)
+                        *cell_below_new = (Cell) {
+                            .type = current_cell_old->prop.cell_to_spawn,
+                                .prop = {0},
+                        };
+                    if (cell_above_old->type != CELL_TYPE_NONE)
+                        *current_cell_new = (Cell) {
+                            .type = CELL_TYPE_FACTORY,
+                                .prop.cell_to_spawn = cell_above_old->type,
+                        };
+                    else
+                        *current_cell_new = *current_cell_old;
+                        */
+                } break;
+                case CELL_TYPE_WALL: {
+                } break;
+                default: {
+                    TraceLog(LOG_FATAL, "no logic in place for cell type %d", CELLS[i].type);
+                    CloseWindow(); exit(1);
+                } break;
+                }
+
+                if (CELLS[i].type != CELL_TYPE_WALL) {
+                    if /**/ (CELLS[i].x >= (int) WORLD_WIDTH)
+                        CELLS[i].x = 0;
+                    else if (CELLS[i].x < 0)
+                        CELLS[i].x = WORLD_WIDTH - 1;
+                    else if (CELLS[i].y >= (int) WORLD_HEIGHT)
+                        CELLS[i].y = 0;
+                    else if (CELLS[i].y < 0)
+                        CELLS[i].y = WORLD_HEIGHT - 1;
                 }
             }
             water_flows_right = !water_flows_right;
-
-#ifndef SINGLE_BUFFER
-            ClearWorld(world_old, WORLD_WIDTH, WORLD_HEIGHT);
-
-            {
-                // swap buffers
-                World *tmp = world_old;
-                world_old = world_new;
-                world_new = tmp;
-            }
-#endif // SINGLE_BUFFER
         }
 
         // an alternative way to quit since raylib uses keycodes instead of keysyms
         // and using caps lock for escape via xkb options doesn't work >:(
+        // TODO: I can change the quit key with raylib.
         if (IsKeyDown(KEY_Q)) {
             CloseWindow();
             exit(0);
@@ -269,10 +248,12 @@ int main(void)
                     paint_cell = (Cell) { .type = CELL_TYPE_WALL };
                     can_click = false; painting = false;
                 } else if (ButtonClicked(factory_button)) {
-                    paint_cell = (Cell) { .type = CELL_TYPE_FACTORY, .prop.cell_to_spawn = CELL_TYPE_NONE };
+                    // TODO: look, factories must be reworked
+                    // paint_cell = (Cell) { .type = CELL_TYPE_FACTORY, .prop.cell_to_spawn = CELL_TYPE_NONE };
                     can_click = false; painting = false;
                 } else if (ButtonClicked(none_button)) {
-                    paint_cell = (Cell) { .type = CELL_TYPE_NONE };
+                    // TODO: look, erasing must be reworked
+                    //paint_cell = (Cell) { .type = CELL_TYPE_NONE };
                     can_click = false; painting = false;
                 } else {
                     painting = true; can_click = false;
@@ -282,17 +263,22 @@ int main(void)
             painting  = false; can_click = true;
         }
 
+        // TODO: painting existing outside of FPS regulation may be bad
         if (painting) {
             Vector2 p = GetMousePosition();
             p.x /= CELL_WIDTH;
             p.y /= CELL_HEIGHT;
             int ix = (size_t) Clamp(p.x, 1, WORLD_WIDTH - 2); // padding for walls
             int iy = (size_t) Clamp(p.y, 1, WORLD_HEIGHT - 2);
+            // loop for brush size
             for (int i = ix - (brush_radius - 1); i < ix + brush_radius; ++i) {
                 if (i < 1 || i > (int) WORLD_WIDTH - 2) continue;
                 for (int j = iy - (brush_radius - 1); j < iy + brush_radius; ++j) {
                     if (j < 1 || j > (int) WORLD_HEIGHT - 2) continue;
-                    (*world_old)[i][j] = paint_cell;
+                    // TODO: check if a cell exists under the cursor
+                    paint_cell.x = i;
+                    paint_cell.y = j;
+                    add_cell(paint_cell);
                 }
             }
         }
@@ -301,37 +287,35 @@ int main(void)
             // the "old" buffer is actually the new one due to the swap
             // I just wanted the drawing to be the very last thing in the main loop
             ClearBackground(BG_COLOR);
-            for (size_t i = 0; i < WORLD_WIDTH; ++i) {
-                for (size_t j = 0; j < WORLD_HEIGHT; ++j) {
-                    Color col;
-                    switch ((*world_old)[i][j].type) {
-                    case CELL_TYPE_WALL:
-                        col = WALL_COLOR;
-                        break;
-                    case CELL_TYPE_FACTORY:
-                        col = FACTORY_COLOR;
-                        break;
-                    case CELL_TYPE_SAND:
-                        col = SAND_COLOR;
-                        break;
-                    case CELL_TYPE_WATER:
-                        col = WATER_COLOR;
-                        break;
-                    case CELL_TYPE_OIL:
-                        col = OIL_COLOR;
-                        break;
-                    default:
-                        col = BG_COLOR;
-                        break;
-                    }
-                    Rectangle rec = {
-                        .x = ((float) i * CELL_WIDTH),
-                        .y = ((float) j * CELL_HEIGHT),
-                        .width  = CELL_WIDTH,
-                        .height = CELL_HEIGHT,
-                    };
-                    DrawRectangleRec(rec, col);
+            for (size_t i = 0; i < CELL_COUNT; ++i) {
+                Color col;
+                switch (CELLS[i].type) {
+                case CELL_TYPE_WALL:
+                    col = WALL_COLOR;
+                    break;
+                case CELL_TYPE_FACTORY:
+                    col = FACTORY_COLOR;
+                    break;
+                case CELL_TYPE_SAND:
+                    col = SAND_COLOR;
+                    break;
+                case CELL_TYPE_WATER:
+                    col = WATER_COLOR;
+                    break;
+                case CELL_TYPE_OIL:
+                    col = OIL_COLOR;
+                    break;
+                default:
+                    col = BG_COLOR;
+                    break;
                 }
+                Rectangle rec = {
+                    .x = ((float) CELLS[i].x * CELL_WIDTH),
+                    .y = ((float) CELLS[i].y * CELL_HEIGHT),
+                    .width  = CELL_WIDTH,
+                    .height = CELL_HEIGHT,
+                };
+                DrawRectangleRec(rec, col);
             }
 
             DrawButton(sand_button);
