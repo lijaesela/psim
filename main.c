@@ -1,5 +1,5 @@
-#include <raymath.h>
 #include <raylib.h>
+#include <raymath.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
