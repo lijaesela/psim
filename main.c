@@ -55,6 +55,20 @@ World *world_new = &world_b1;
 #endif // SINGLE_BUFFER
 float step_time = 0; // BASE_STEP_TIME;
 
+char *cell_type_as_str(CellType t)
+{
+    switch (t) {
+    case CELL_TYPE_NONE:    return "CELL_TYPE_NONE";
+    case CELL_TYPE_FIRE:    return "CELL_TYPE_FIRE";
+    case CELL_TYPE_OIL:     return "CELL_TYPE_OIL";
+    case CELL_TYPE_WATER:   return "CELL_TYPE_WATER";
+    case CELL_TYPE_SAND:    return "CELL_TYPE_SAND";
+    case CELL_TYPE_FACTORY: return "CELL_TYPE_FACTORY";
+    case CELL_TYPE_WALL:    return "CELL_TYPE_WALL";
+    default: return "[unreachable]";
+    }
+}
+
 static inline
 void ClearWorld(World *world, size_t width, size_t height)
 {
@@ -118,18 +132,30 @@ int main(void)
     bool can_click = true;
     int brush_radius = BRUSH_MIN;
     bool water_flows_right = true;
+
+    CellType debug_cell_counter_type = CELL_TYPE_WATER;
+    int debug_cell_counter;
+    bool debug_mode = true;
+
     while (!WindowShouldClose()) {
         const float dt = GetFrameTime();
         elapsed_time += dt;
         if (elapsed_time >= step_time) {
             elapsed_time = 0;
 
+            debug_cell_counter = 0;
             for (size_t j = 0; j < WORLD_HEIGHT; ++j) {
                 for (size_t i = 0; i < WORLD_WIDTH; ++i) {
-                    const Cell *current_cell_old = &(*world_old)[i][j];
+
+                    // shortcuts
+                    /* const */ Cell *current_cell_old = &(*world_old)[i][j];
                     Cell *current_cell_new = &(*world_new)[i][j];
-                    const Cell *cell_below_old = &(*world_old)[i][j+1];
+                    /* const */ Cell *cell_below_old = &(*world_old)[i][j+1];
                     Cell *cell_below_new = &(*world_new)[i][j+1];
+
+                    if (current_cell_old->type == debug_cell_counter_type)
+                        debug_cell_counter++;
+
                     switch (current_cell_old->type) {
                     case CELL_TYPE_NONE: break;
                     case CELL_TYPE_SAND: {
@@ -142,13 +168,31 @@ int main(void)
                             // fall through water and push it above
                             *cell_below_new = *current_cell_old;
                             *current_cell_new = *cell_below_old;
+
+                            // modify the old cell so that the water doesn't duplicate
+                            *cell_below_old = (Cell) { .type = CELL_TYPE_NONE };
+                            if (cell_below_old->type != CELL_TYPE_WATER)
+                                current_cell_old->type = CELL_TYPE_NONE;
                         } break;
+                            // what a mess
                         default: {
                             // flow down diagonally to make dunes
-                            if ((*world_old)[i+1][j+1].type <= CELL_TYPE_WATER)
+                            if ((*world_old)[i+1][j+1].type <= CELL_TYPE_WATER) {
                                 (*world_new)[i+1][j+1] = *current_cell_old;
-                            else if ((*world_old)[i-1][j+1].type <= CELL_TYPE_WATER)
+                                // push the existing cell up
+                                // no don't do that, you can only keep equivalent exchange
+                                // by SWAPPING
+                                *current_cell_new = (*world_old)[i+1][j+1];
+                                // once again, make sure the old cell(s) is (are) gone
+                                if ((*world_old)[i+1][j+1].type != CELL_TYPE_WATER)
+                                    (*world_old)[i+1][j+1].type = CELL_TYPE_NONE;
+                            }
+                            else if ((*world_old)[i-1][j+1].type <= CELL_TYPE_WATER) {
                                 (*world_new)[i-1][j+1] = *current_cell_old;
+                                *current_cell_new = (*world_old)[i-1][j+1];
+                                if ((*world_old)[i-1][j+1].type != CELL_TYPE_WATER)
+                                    (*world_old)[i-1][j+1].type = CELL_TYPE_NONE;
+                            }
                             else
                                 *current_cell_new = *current_cell_old;
                         } break;
@@ -342,6 +386,14 @@ int main(void)
             DrawButton(none_button);
             DrawSlider(brush_slider);
             DrawSlider(time_slider);
+
+            if (debug_mode) {
+                DrawText(TextFormat("%s QTY: %d",
+                                    cell_type_as_str(debug_cell_counter_type),
+                                    debug_cell_counter),
+                         UI_PADDING, WIN_HEIGHT - UI_PADDING * 3,
+                         UI_FONT_SIZE, UI_FONT_COLOR);
+            }
 
         EndDrawing();
     }
